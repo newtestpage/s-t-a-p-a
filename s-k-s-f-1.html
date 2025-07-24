@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoviBall Connect — Shaka Player</title>
+
+  <!-- Shaka Player -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.15.8/shaka-player.compiled.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #000;
+            color: #fff;
+        }
+
+        video {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #video-container {
+            width: 100%;
+            max-width: 640px; 
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+  <div id="wrapper">
+    <video
+      id="video"
+      playsinline
+      autoplay
+      preload="auto"
+    ></video>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      shaka.polyfill.installAll();
+      if (!shaka.Player.isBrowserSupported()) {
+        console.error('not supporting');
+        return;
+      }
+
+      const manifestUri = 'https://linear201-de-dash1-prd-cf.cdn12.skycdp.com/bced/032111-50/index_stereo.mpd';
+      const video = document.getElementById('video');
+      const player = new shaka.Player(video);
+
+      video.muted = false;
+      video.autoplay = true;
+      video.playsInline = true;
+
+      player.configure({
+        drm: {
+          clearKeys: {
+            '000b4b05b463b25ac9474c6b8de9242a': '108e1dc2c98ce68de84cbfd1b1715c03'
+          }
+        },
+        streaming: {
+          bufferingGoal: 3,     
+          rebufferingGoal: 1,  
+          lowLatencyMode: true,  
+          abr: {
+            enabled: true,
+            defaultBandwidthEstimate: 1_000_000
+          }
+        }
+      });
+
+      player.load(manifestUri)
+        .then(() => {
+          console.log('Playing');
+          return video.play();
+        })
+        .catch(err => {
+          console.error('Error', err);
+        });
+
+
+      document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) {
+          screen.orientation.lock('landscape').catch(()=>{});
+        } else {
+          screen.orientation.unlock();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
