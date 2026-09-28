@@ -1,100 +1,217 @@
-<!DOCTYPE html>
-<html lang="fa">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MoviBall Connect — Shaka Player</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Fullscreen Autoplay Iframe</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
 
-  <!-- Shaka Player -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.15.8/shaka-player.compiled.js"></script>
+    iframe {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+      background: #000;
+    }
 
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            height: 100vh;
-            background-color: #000;
-            color: #fff;
-        }
+    .launcher {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      background: #000;
+    }
 
-        video {
-            width: 100%;
-            max-width: 100%;
-            height: auto;
-        }
+    .launcher[hidden] {
+      display: none;
+    }
 
-        #video-container {
-            width: 100%;
-            max-width: 640px; 
-            margin: 0 auto;
-        }
-    </style>
+    .box {
+      width: min(520px, 100%);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    input {
+      min-width: 0;
+      flex: 1;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 13px 14px;
+      color: #fff;
+      background: #111;
+      font-size: 16px;
+      outline: none;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 0 18px;
+      color: #000;
+      background: #f5c400;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .hint {
+      margin-top: 12px;
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+  </style>
 </head>
 <body>
-  <div id="wrapper">
-    <video
-      id="video"
-      playsinline
-      autoplay
-      preload="auto"
-    ></video>
+  <div class="launcher" id="launcher">
+    <form class="box" id="channelForm">
+      <label for="channelInput">Channel ID or full player URL</label>
+      <div class="row">
+        <input id="channelInput" autocomplete="off" placeholder="FoxNewsUS">
+        <button type="submit">Open</button>
+      </div>
+      <div class="hint">
+        Examples: ?channel=FoxNewsUS, ?channel=USANETEAST, ?id=WWE, ?WWE, or #WWE
+      </div>
+    </form>
   </div>
 
+  <iframe
+    id="playerFrame"
+    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+    allowfullscreen
+    loading="eager"
+    referrerpolicy="no-referrer-when-downgrade">
+  </iframe>
+
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      shaka.polyfill.installAll();
-      if (!shaka.Player.isBrowserSupported()) {
-        console.error('not supporting');
+    const BASE_PLAYER_URL = "https://wideiptv.top/player/";
+    const AUTOPLAY_PARAMS = {
+      autoplay: "1",
+      autoPlay: "1",
+      muted: "1",
+      mute: "1",
+      volume: "0",
+      playsinline: "1"
+    };
+
+    const frame = document.getElementById("playerFrame");
+    const launcher = document.getElementById("launcher");
+    const form = document.getElementById("channelForm");
+    const input = document.getElementById("channelInput");
+
+    function readRequestedChannel() {
+      const params = new URLSearchParams(window.location.search);
+      const namedValue =
+        params.get("channel") ||
+        params.get("id") ||
+        params.get("c") ||
+        params.get("name") ||
+        params.get("q") ||
+        params.get("url");
+
+      if (namedValue) {
+        return namedValue;
+      }
+
+      const bareQuery = window.location.search.replace(/^\?/, "").trim();
+      if (bareQuery && !bareQuery.includes("=")) {
+        return decodeURIComponent(bareQuery);
+      }
+
+      const hashValue = window.location.hash.replace(/^#/, "").trim();
+      return hashValue ? decodeURIComponent(hashValue) : "";
+    }
+
+    function addAutoplayParams(url) {
+      const playerUrl = new URL(url, window.location.href);
+      Object.entries(AUTOPLAY_PARAMS).forEach(([key, value]) => {
+        playerUrl.searchParams.set(key, value);
+      });
+      return playerUrl.toString();
+    }
+
+    function buildPlayerUrl(value) {
+      const cleanValue = String(value || "").trim();
+      if (!cleanValue) {
+        return "";
+      }
+
+      if (/^https?:\/\//i.test(cleanValue)) {
+        return addAutoplayParams(cleanValue);
+      }
+
+      const channelId = cleanValue.replace(/^\/+/, "");
+      return addAutoplayParams(BASE_PLAYER_URL + encodeURIComponent(channelId));
+    }
+
+    function openChannel(value, updateHash = false) {
+      const playerUrl = buildPlayerUrl(value);
+      if (!playerUrl) {
+        launcher.hidden = false;
         return;
       }
 
-      const manifestUri = 'https://linear201-de-dash1-prd-cf.cdn12.skycdp.com/bced/032111-50/index_stereo.mpd';
-      const video = document.getElementById('video');
-      const player = new shaka.Player(video);
+      frame.src = playerUrl;
+      launcher.hidden = true;
+      frame.focus();
 
-      video.muted = false;
-      video.autoplay = true;
-      video.playsInline = true;
+      if (updateHash && !/^https?:\/\//i.test(value)) {
+        history.replaceState(null, "", "#" + encodeURIComponent(value.trim()));
+      }
+    }
 
-      player.configure({
-        drm: {
-          clearKeys: {
-            '000b4b05b463b25ac9474c6b8de9242a': '108e1dc2c98ce68de84cbfd1b1715c03'
-          }
-        },
-        streaming: {
-          bufferingGoal: 3,     
-          rebufferingGoal: 1,  
-          lowLatencyMode: true,  
-          abr: {
-            enabled: true,
-            defaultBandwidthEstimate: 1_000_000
-          }
-        }
-      });
-
-      player.load(manifestUri)
-        .then(() => {
-          console.log('Playing');
-          return video.play();
-        })
-        .catch(err => {
-          console.error('Error', err);
-        });
-
-
-      document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement) {
-          screen.orientation.lock('landscape').catch(()=>{});
-        } else {
-          screen.orientation.unlock();
-        }
-      });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      openChannel(input.value, true);
     });
+
+    window.addEventListener("hashchange", () => {
+      openChannel(readRequestedChannel());
+    });
+
+    window.addEventListener("pageshow", () => {
+      frame.focus();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        frame.focus();
+      }
+    });
+
+    const requestedChannel = readRequestedChannel();
+    if (requestedChannel) {
+      openChannel(requestedChannel);
+    } else {
+      input.focus();
+    }
   </script>
 </body>
 </html>
